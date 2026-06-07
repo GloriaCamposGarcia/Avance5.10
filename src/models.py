@@ -8,7 +8,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier, StackingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import (
@@ -144,3 +144,16 @@ def max_priority_score(review_queue_json_text):
         return max(weights.get(it.get('priority', '').lower(), 0.0) for it in items)
     except Exception:
         return 0.0
+
+def build_stacking(estimators, final_estimator=None):
+    """
+    Construye un StackingClassifier con estimadores base y un meta-clasificador.
+    """
+    if final_estimator is None:
+        final_estimator = LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42)
+    return StackingClassifier(
+        estimators=estimators,
+        final_estimator=final_estimator,
+        cv=3,
+        n_jobs=1
+    )

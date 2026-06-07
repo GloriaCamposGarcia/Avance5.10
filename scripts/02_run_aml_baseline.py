@@ -2,6 +2,7 @@ from sklearn.metrics import accuracy_score
 import os
 import sys
 import json
+import time
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
@@ -25,7 +26,7 @@ from src.models import (
     build_preprocessor, GRID_DUMMY, GRID_GB, GRID_KNN, GRID_LOGISTIC,
     GRID_RF, GRID_SVM, GRID_TREE, build_dummy, build_gb, build_knn,
     build_logistic, build_rf, build_svm, build_tree, evaluate_model,
-    quality_metrics, max_priority_score
+    quality_metrics, max_priority_score, build_stacking
 )
 
 def main():
@@ -223,7 +224,11 @@ def main():
         grid = param_grids.get(name, {})
         if not grid:
             # dummy no tiene grid
+            t0 = time.time()
             best_pipe = trained_models[name]
+            best_pipe.fit(X_train, y_train)
+            train_time = time.time() - t0
+            
             tuned_models[name] = best_pipe
             metrics_val = quality_metrics(best_pipe, X_val, y_val)
             tuned_rows.append({
@@ -235,12 +240,16 @@ def main():
                 'f1': round(float(metrics_val['f1']), 4),
                 'pr_auc': round(float(metrics_val['pr_auc']), 4),
                 'roc_auc': round(float(metrics_val['roc_auc']), 4),
+                'train_time_seconds': round(train_time, 4),
             })
             continue
 
         pipeline = Pipeline([('preprocessor', preprocessor), ('model', clone(candidate_models[name]))])
+        
+        t0 = time.time()
         search = GridSearchCV(pipeline, grid, scoring='average_precision', cv=cv, n_jobs=1, verbose=0)
         search.fit(X_train, y_train)
+        train_time = time.time() - t0
         
         best_pipe = search.best_estimator_
         tuned_models[name] = best_pipe
@@ -256,11 +265,50 @@ def main():
             'f1': round(float(metrics_val['f1']), 4),
             'pr_auc': round(float(metrics_val['pr_auc']), 4),
             'roc_auc': round(float(metrics_val['roc_auc']), 4),
+            'train_time_seconds': round(train_time, 4),
         })
 
+    # 7.1. Construcción del Stacking Classifier (Ensamble Heterogéneo)
+    print("\nConstruyendo y entrenando Stacking Classifier...")
+    try:
+        base_estimators = [
+            ('logreg', clone(tuned_models['baseline_1_logreg'].named_steps['model'])),
+            ('tree', clone(tuned_models['baseline_2_tree'].named_steps['model'])),
+            ('rf', clone(tuned_models['baseline_3_rf'].named_steps['model'])),
+        ]
+        
+        t0_stack = time.time()
+        stacking_clf = build_stacking(estimators=base_estimators)
+        stacking_pipeline = Pipeline([('preprocessor', preprocessor), ('model', stacking_clf)])
+        stacking_pipeline.fit(X_train, y_train)
+        stacking_time = time.time() - t0_stack
+        
+        tuned_models['ensemble_stacking'] = stacking_pipeline
+        metrics_val_stack = quality_metrics(stacking_pipeline, X_val, y_val)
+        
+        tuned_rows.append({
+            'model': 'ensemble_stacking',
+            'best_score_cv_pr_auc': np.nan,
+            'accuracy': round(float(accuracy_score(y_val, stacking_pipeline.predict(X_val))), 4),
+            'precision': round(float(metrics_val_stack['precision']), 4),
+            'recall_pos': round(float(metrics_val_stack['recall_pos']), 4),
+            'f1': round(float(metrics_val_stack['f1']), 4),
+            'pr_auc': round(float(metrics_val_stack['pr_auc']), 4),
+            'roc_auc': round(float(metrics_val_stack['roc_auc']), 4),
+            'train_time_seconds': round(stacking_time, 4),
+        })
+        print("Stacking Classifier entrenado con éxito.")
+    except Exception as e:
+        print(f"Error al construir/entrenar el Stacking Classifier: {e}")
+
+    # Exportar tabla comparativa ordenada por pr_auc desc
     tuned_df = pd.DataFrame(tuned_rows).sort_values('pr_auc', ascending=False).reset_index(drop=True)
     print("\nDesempeño de modelos ajustados en Validación:")
     print(tuned_df.to_string(index=False))
+    
+    metrics_comparison_path = processed_dir / 'metrics_comparison.csv'
+    tuned_df.to_csv(metrics_comparison_path, index=False)
+    print(f"Tabla comparativa guardada en: {metrics_comparison_path}")
 
     # 8. Selección final de modelo y exportación
     best_model_name = tuned_df.iloc[0]['model'] if not tuned_df.empty else metrics_models_df.iloc[0]['model']
@@ -304,6 +352,109 @@ def main():
     test_predictions_path = processed_dir / 'test_predictions.csv'
     test_predictions_df.to_csv(test_predictions_path, index=False)
     print(f"Predicciones de prueba guardadas en: {test_predictions_path}")
+
+    # 8.1. Generación de Gráficos de Diagnóstico (Mejores Prácticas AML)
+    print("\nGenerando gráficos de diagnóstico...")
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from sklearn.metrics import confusion_matrix, roc_curve, precision_recall_curve, auc
+        from sklearn.inspection import permutation_importance
+
+        # Estilo premium
+        sns.set_theme(style="whitegrid")
+        plt.rcParams.update({
+            'font.family': 'sans-serif',
+            'font.size': 11,
+            'axes.labelsize': 12,
+            'axes.titlesize': 13,
+            'xtick.labelsize': 10,
+            'ytick.labelsize': 10,
+            'figure.titlesize': 14
+        })
+
+        # 1. Matriz de Confusión
+        cm = confusion_matrix(y_test, y_pred_test)
+        fig, ax = plt.subplots(figsize=(6, 5))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+                    xticklabels=['No Riesgo (0)', 'Riesgo (1)'],
+                    yticklabels=['No Riesgo (0)', 'Riesgo (1)'], ax=ax)
+        ax.set_title(f'Matriz de Confusión - {best_model_name} (Test)', pad=15, fontweight='bold')
+        ax.set_ylabel('Clase Real', fontweight='bold')
+        ax.set_xlabel('Clase Predicha', fontweight='bold')
+        plt.tight_layout()
+        cm_path = processed_dir / 'confusion_matrix.png'
+        plt.savefig(cm_path, dpi=300)
+        plt.close()
+        print(f"Matriz de confusión guardada en: {cm_path}")
+
+        # 2. Curva ROC
+        fig, ax = plt.subplots(figsize=(6, 5))
+        if not np.isnan(y_score_test).all():
+            fpr, tpr, _ = roc_curve(y_test, y_score_test)
+            roc_auc_val = auc(fpr, tpr)
+            ax.plot(fpr, tpr, color='darkorange', lw=2, label=f'Curva ROC (AUC = {roc_auc_val:.4f})')
+        ax.plot([0, 1], [0, 1], color='navy', lw=1.5, linestyle='--')
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('Tasa de Falsos Positivos (FPR)', fontweight='bold')
+        ax.set_ylabel('Tasa de Verdaderos Positivos (TPR)', fontweight='bold')
+        ax.set_title(f'Curva ROC - {best_model_name} (Test)', pad=15, fontweight='bold')
+        ax.legend(loc="lower right")
+        plt.tight_layout()
+        roc_path = processed_dir / 'roc_curve.png'
+        plt.savefig(roc_path, dpi=300)
+        plt.close()
+        print(f"Curva ROC guardada en: {roc_path}")
+
+        # 3. Curva Precision-Recall
+        fig, ax = plt.subplots(figsize=(6, 5))
+        if not np.isnan(y_score_test).all():
+            precision_pts, recall_pts, _ = precision_recall_curve(y_test, y_score_test)
+            pr_auc_val = test_metrics.get('pr_auc', np.nan)
+            if np.isnan(pr_auc_val):
+                from sklearn.metrics import average_precision_score
+                pr_auc_val = average_precision_score(y_test, y_score_test)
+            ax.plot(recall_pts, precision_pts, color='forestgreen', lw=2, label=f'Curva PR (AUC = {pr_auc_val:.4f})')
+        
+        baseline_ratio = y_test.mean()
+        ax.axhline(y=baseline_ratio, color='grey', linestyle='--', label=f'Línea Base ({baseline_ratio:.4f})')
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('Recall (Sensibilidad)', fontweight='bold')
+        ax.set_ylabel('Precision (Precisión)', fontweight='bold')
+        ax.set_title(f'Curva Precision-Recall - {best_model_name} (Test)', pad=15, fontweight='bold')
+        ax.legend(loc="lower left")
+        plt.tight_layout()
+        pr_path = processed_dir / 'precision_recall_curve.png'
+        plt.savefig(pr_path, dpi=300)
+        plt.close()
+        print(f"Curva Precision-Recall guardada en: {pr_path}")
+
+        # 4. Importancia de Características (Permutación)
+        print("Calculando importancia de características mediante permutación...")
+        fig, ax = plt.subplots(figsize=(7, 5))
+        perm_result = permutation_importance(best_pipeline, X_test, y_test, n_repeats=5, random_state=42, n_jobs=1)
+        sorted_idx = perm_result.importances_mean.argsort()
+        
+        ax.barh(range(len(sorted_idx)), perm_result.importances_mean[sorted_idx], 
+                xerr=perm_result.importances_std[sorted_idx], align='center', color='royalblue', alpha=0.8)
+        ax.set_yticks(range(len(sorted_idx)))
+        ax.set_yticklabels([X_test.columns[i] for i in sorted_idx], fontweight='bold')
+        ax.set_xlabel('Disminución de Score (Exactitud / PR-AUC)', fontweight='bold')
+        ax.set_title(f'Importancia de Características - {best_model_name}', pad=15, fontweight='bold')
+        plt.tight_layout()
+        feat_path = processed_dir / 'feature_importance.png'
+        plt.savefig(feat_path, dpi=300)
+        plt.close()
+        print(f"Gráfico de importancia de características guardado en: {feat_path}")
+        
+    except Exception as e:
+        print(f"Error al generar los gráficos de diagnóstico: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Manifest json
     manifest_path = processed_dir / 'run_manifest.json'
