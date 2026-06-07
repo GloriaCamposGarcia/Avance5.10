@@ -29,22 +29,30 @@ Avance5.10/
 │   ├── raw/                  # Colocar los datasets CSV fuente aquí.
 │   │   ├── entity_source_results.csv  # Resultados de consultas y metadatos de entidades.
 │   │   └── evidence_items.csv         # Evidencias recuperadas para las entidades.
-│   └── processed/            # Ubicación de los CSVs y modelos generados.
+│   └── processed/            # Ubicación de los CSVs, modelos y gráficos generados.
 │       ├── similarity_results.csv          # Similitudes coseno calculadas.
 │       ├── manual_review_queue.csv         # Cola de revisión manual priorizada.
-│       ├── best_model.pkl                  # Pipeline del mejor clasificador (Tree).
-│       ├── run_manifest.json               # Metadatos e hiperparámetros de corrida.
-│       └── test_metrics.csv                # Métricas de evaluación final.
+│       ├── best_model.pkl                  # Pipeline del mejor clasificador (Random Forest).
+│       ├── metrics_comparison.csv          # Tabla comparativa de todos los modelos y tiempos.
+│       ├── run_manifest.json               # Metadatos de la corrida.
+│       ├── test_metrics.csv                # Métricas de evaluación final en test.
+│       ├── test_predictions.csv            # Predicciones de test (reales, predichas, scores).
+│       ├── osint_risk_scores.csv           # Scores operativos continuos calculados.
+│       ├── confusion_matrix.png            # Matriz de confusión del modelo ganador.
+│       ├── roc_curve.png                   # Curva ROC del modelo ganador.
+│       ├── precision_recall_curve.png      # Curva Precision-Recall del modelo ganador.
+│       └── feature_importance.png          # Importancia de variables por permutación.
 ├── docs/
 │   ├── Embeddings_Resolution_Conclusions.md # Conclusiones de normalización y embeddings.
-│   └── AML_Baseline_Risk_Model_Conclusions.md # Análisis de modelos, importancia y score.
+│   ├── AML_Baseline_Risk_Model_Conclusions.md # Análisis de modelos (ensambles), importancia y score.
+│   └── Comparative_Analysis_Sintetico_vs_Real.md # Comparativo entre corridas de datos sintéticos y reales.
 ├── src/                      # Biblioteca de lógica de negocio del proyecto.
 │   ├── __init__.py
 │   ├── normalization.py      # Normalización y limpieza de nombres.
 │   ├── variants.py           # Algoritmo de generación de 7 reglas de variantes.
 │   ├── blocking.py           # Algoritmo de indexación y blocking.
-│   ├── embeddings.py         # Motores vectoriales (TF-IDF, OpenAI) y similitud.
-│   └── models.py             # Preprocesamiento, estimadores y prioridad.
+│   ├── embeddings.py         # Motores vectoriales (TF-IDF, OpenAI, Sentence-Transformers) y similitud.
+│   └── models.py             # Preprocesamiento, estimadores, stacking y prioridad.
 ├── scripts/                  # Scripts ejecutables de automatización.
 │   ├── __init__.py
 │   ├── 01_run_embeddings.py  # Ejecución de la Fase 1 (Embeddings).
@@ -139,8 +147,8 @@ python scripts/01_run_embeddings.py
 *Salidas generadas en `data/processed/`: `similarity_results.csv` y `manual_review_queue.csv`.*
 
 ### Fase 2: Entrenamiento de Modelado AML
-Para ejecutar el preprocesamiento, partición, entrenamiento con validación cruzada y ajuste de hiperparámetros (GridSearchCV) del clasificador de riesgo:
+Para ejecutar el preprocesamiento, partición, optimización de hiperparámetros de modelos baseline y ensambles homogéneos/heterogéneos (Random Forest, Gradient Boosting, Stacking Classifier), medición de tiempos, exportación de la tabla comparativa de modelos y generación automatizada de curvas e importancias de diagnóstico:
 ```bash
 python scripts/02_run_aml_baseline.py
 ```
-*Salidas generadas en `data/processed/`: `best_model.pkl`, `run_manifest.json`, `test_metrics.csv` y `test_predictions.csv`.*
+*Salidas generadas en `data/processed/`: `best_model.pkl`, `metrics_comparison.csv`, `run_manifest.json`, `test_metrics.csv`, `test_predictions.csv`, `osint_risk_scores.csv` y los 4 archivos de gráficos de diagnóstico (`confusion_matrix.png`, `roc_curve.png`, `precision_recall_curve.png`, `feature_importance.png`).*
