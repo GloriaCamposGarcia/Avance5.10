@@ -1,0 +1,2 @@
+model,accuracy,precision,recall,f1,roc_auc,pr_auc
+baseline_3_rf,1.0,1.0,1.0,1.0,1.0,1.0

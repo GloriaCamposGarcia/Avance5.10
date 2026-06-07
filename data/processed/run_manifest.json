@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-06-06 21:52:24",
+  "project_root": "C:\\Users\\gloca\\OneDrive\\Desktop\\Proyectos\\Repositorios\\Avance5.10",
+  "candidate_features": [
+    "entity_type",
+    "country_code",
+    "sources_evaluated",
+    "sources_with_hallazgo",
+    "max_identity_score",
+    "evidence_items",
+    "review_items"
+  ],
+  "selected_model": "baseline_3_rf",
+  "model_path": "C:\\Users\\gloca\\OneDrive\\Desktop\\Proyectos\\Repositorios\\Avance5.10\\data\\processed\\best_model.pkl",
+  "test_metrics_path": "C:\\Users\\gloca\\OneDrive\\Desktop\\Proyectos\\Repositorios\\Avance5.10\\data\\processed\\test_metrics.csv",
+  "test_predictions_path": "C:\\Users\\gloca\\OneDrive\\Desktop\\Proyectos\\Repositorios\\Avance5.10\\data\\processed\\test_predictions.csv",
+  "confusion_matrix": [
+    [
+      825,
+      0
+    ],
+    [
+      0,
+      168
+    ]
+  ]
+}

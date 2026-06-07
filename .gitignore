@@ -16,10 +16,15 @@ ENV/
 # Data and Models
 data/raw/*
 !data/raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
 *.pkl
 artifacts/
+
+# Ignorar solo los archivos con información sensible
+!data/processed/*
+!data/processed/.gitkeep
+data/processed/similarity_results.csv
+data/processed/osint_risk_scores.csv
+data/processed/manual_review_queue.csv
 
 # OS specific files
 .DS_Store
