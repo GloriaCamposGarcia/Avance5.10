@@ -60,9 +60,38 @@ Avance5.10/
 ---
 
 ## 4. Normas del Entorno
-- **Configuración del API Key**: Para utilizar el backend semántico de OpenAI, configure la variable de entorno `OPENAI_API_KEY` en su sistema o cree un archivo `.env` en la raíz del proyecto.
-- **Selección de Backend**: Puede forzar el uso de un motor vectorial específico seteando la variable de entorno `EMBEDDING_BACKEND` con los valores `tfidf` (por defecto, ganador de la validación) o `openai`.
-- **Modelo OpenAI**: Por defecto se utiliza `text-embedding-3-small` para OpenAI, modificable con la variable de entorno `OPENAI_EMBEDDING_MODEL`.
+
+Para ejecutar los pipelines con soporte de modelos de lenguaje o incrustaciones semánticas, es necesario configurar variables de entorno locales.
+
+### Gestión Segura de Credenciales (`.env`)
+El proyecto incluye soporte integrado para leer variables de entorno locales desde un archivo `.env` ubicado en la raíz del proyecto. El archivo `.env` está registrado de forma explícita en `.gitignore`, por lo que **nunca se subirá al repositorio Git remoto**, garantizando la confidencialidad de tus credenciales.
+
+#### Pasos para Configurar tu Entorno Local:
+1. **Instalar Dependencia**: Asegúrate de tener instalada la biblioteca `python-dotenv`:
+   ```bash
+   pip install python-dotenv
+   ```
+2. **Crear el archivo `.env`**: En la raíz de este proyecto (al mismo nivel que `README.md` y `.gitignore`), crea un archivo de texto llamado exactamente `.env`.
+3. **Definir Variables**: Abre el archivo e ingresa las siguientes variables según sea tu caso:
+   ```ini
+   # --- CONFIGURACIÓN DE CONEXIÓN CON OPENAI ---
+   # Ingresa tu clave secreta de OpenAI sin comillas ni espacios extras.
+   # Ejemplo: OPENAI_API_KEY=sk-proj-XXXXX...
+   OPENAI_API_KEY=tu_clave_secreta_aqui
+
+   # --- CONFIGURACIÓN DE BACKEND DE EMBEDDINGS ---
+   # Valores posibles: 'tfidf' (local/gratuito, por defecto) o 'openai' (requiere API KEY válida)
+   EMBEDDING_BACKEND=tfidf
+
+   # --- CONFIGURACIÓN DE MODELO DE EMBEDDINGS ---
+   # Modelo de embedding a utilizar si backend es 'openai'
+   OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+   ```
+
+#### Consideraciones Críticas de Seguridad y Uso:
+* **Nunca expongas tu clave**: Bajo ninguna circunstancia escribas tu `OPENAI_API_KEY` directamente en el código de `src/` o `scripts/`. Utiliza siempre `os.getenv("OPENAI_API_KEY")`.
+* **Uso sin Costo (TF-IDF)**: Si no deseas usar la API Key de OpenAI o no cuentas con saldo en tu cuenta, puedes dejar el backend como `EMBEDDING_BACKEND=tfidf`. Los scripts ejecutarán todo de forma local, rápida y gratuita utilizando codificación por n-gramas de caracteres.
+* **Declaración sin comillas**: En los archivos de entorno `.env` en Python, no es necesario encerrar las cadenas de texto o llaves API entre comillas (por ejemplo, usa `CLAVE=mi_valor` en lugar de `CLAVE="mi_valor"`).
 
 ---
 

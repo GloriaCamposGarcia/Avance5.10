@@ -3,7 +3,11 @@ import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    HAS_DOTENV = True
+except ImportError:
+    HAS_DOTENV = False
 
 # Añadir la raíz del proyecto al path para poder importar de src
 project_root = Path(__file__).resolve().parent.parent
@@ -20,10 +24,11 @@ from src.embeddings import (
 
 def main():
     # Intentar cargar variables de entorno desde un archivo .env local
-    try:
-        load_dotenv(dotenv_path=project_root / '.env')
-    except ImportError:
-        pass
+    if HAS_DOTENV:
+        try:
+            load_dotenv(dotenv_path=project_root / '.env')
+        except Exception:
+            pass
 
     # 1. Definir rutas y cargar dataset
     raw_data_path = project_root / 'data' / 'raw' / 'Entities_Dataset_sintetico.csv'
