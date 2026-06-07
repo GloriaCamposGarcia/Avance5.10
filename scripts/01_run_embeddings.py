@@ -186,8 +186,8 @@ def main():
     review_queue.to_csv(review_out_path, index=False)
     print(f"Cola de revisión manual guardada en: {review_out_path}")
 
-    # 7. Comparación OpenAI vs TF-IDF (Muestra de validación)
-    print("\nEjecutando validación comparativa (OpenAI vs TF-IDF)...")
+    # 7. Comparación OpenAI vs TF-IDF vs Sentence-Transformers (Muestra de validación)
+    print("\nEjecutando validación comparativa (OpenAI vs TF-IDF vs Sentence-Transformers)...")
     variant_pool = variants_df[['entity_id', 'name_variant'] + [c for c in ['country_code', 'entity_type'] if c in variants_df.columns]].copy()
     variant_pool = variant_pool[variant_pool['name_variant'].notna() & (variant_pool['name_variant'].astype(str).str.len() > 0)].copy()
     variant_pool['name_variant'] = variant_pool['name_variant'].astype(str)
@@ -203,7 +203,7 @@ def main():
         validation_sample = pd.DataFrame(positive_rows + negative_rows).sample(frac=1.0, random_state=42).reset_index(drop=True)
 
         results = []
-        for backend_name in ['openai', 'tfidf']:
+        for backend_name in ['openai', 'tfidf', 'sentence-transformers']:
             try:
                 scored = _score_pairs_for_backend(validation_sample, backend_name)
                 results.append({
@@ -211,6 +211,7 @@ def main():
                     'pairs_scored': int(len(scored)),
                     'roc_auc': round(_safe_auc(scored['same_entity'], scored['cosine_similarity']), 4),
                     'pr_auc': round(_safe_ap(scored['same_entity'], scored['cosine_similarity']), 4),
+                    'error': np.nan
                 })
             except Exception as exc:
                 results.append({
@@ -222,7 +223,7 @@ def main():
                 })
         print(pd.DataFrame(results).to_string(index=False))
     else:
-        print("No hay suficientes variantes para correr la comparación OpenAI vs TF-IDF.")
+        print("No hay suficientes variantes para correr la comparación comparativa de embeddings.")
 
     print("\nFase 1 completada con éxito.")
 

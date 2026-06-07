@@ -19,7 +19,15 @@ En esta fase, la principal diferencia radica en el tamaño de las muestras y la 
 | **ROC AUC (TF-IDF)** | 0.8175 | 0.8100 | Estabilidad en la capacidad de separación |
 | **PR AUC (TF-IDF)** | 0.8055 | 0.8344 | **+3.58%** de mejora de precisión media en real |
 
-> [!NOTE]
+### Comparativa de Backends de Embeddings (Datos Reales):
+Con la integración del backend local de Hugging Face (`sentence-transformers`), se evaluaron y compararon las tres soluciones sobre la muestra real de validación:
+
+* **TF-IDF (Local)**: ROC-AUC = **0.8100** | PR-AUC = **0.8344**
+* **Sentence-Transformers (`all-MiniLM-L6-v2` Local)**: ROC-AUC = **0.6875** | PR-AUC = **0.7538**
+* **OpenAI (`text-embedding-3-small` Remoto)**: No evaluado en corrida real por cuota insuficiente (`insufficient_quota`).
+
+> **Conclusión Metodológica**: TF-IDF a nivel de caracteres (n-gramas 1-3) supera en rendimiento a los embeddings densos locales de Sentence-Transformers para resolver variantes de nombres. Esto se debe a que la variación en nombres propios (errores tipográficos, sufijos, transposiciones) se modela de manera óptima por sub-tokens ortográficos de caracteres, mientras que los embeddings semánticos entrenados en lenguaje natural general sufren al interpretar nombres propios desconocidos o tokens de iniciales muy cortas.
+
 > La drástica reducción de pares candidatos en el bloqueo (-95.97%) se debe al filtro rápido que optimiza la comparación. Esto reduce los requerimientos de memoria y CPU, haciendo viable la ejecución del pipeline completo en pocos segundos.
 
 ---

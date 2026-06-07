@@ -80,17 +80,25 @@ El proyecto incluye soporte integrado para leer variables de entorno locales des
    OPENAI_API_KEY=tu_clave_secreta_aqui
 
    # --- CONFIGURACIÓN DE BACKEND DE EMBEDDINGS ---
-   # Valores posibles: 'tfidf' (local/gratuito, por defecto) o 'openai' (requiere API KEY válida)
+   # Valores posibles: 
+   # - 'tfidf' (local/gratuito, por defecto)
+   # - 'openai' (remoto/pago, requiere API KEY)
+   # - 'sentence-transformers' (local/semántico, requiere instalar dependencias)
    EMBEDDING_BACKEND=tfidf
 
-   # --- CONFIGURACIÓN DE MODELO DE EMBEDDINGS ---
+   # --- CONFIGURACIÓN DE MODELOS DE EMBEDDINGS ---
    # Modelo de embedding a utilizar si backend es 'openai'
    OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+
+   # Modelo local de Hugging Face a utilizar para Sentence-Transformers
+   HF_EMBEDDING_MODEL=all-MiniLM-L6-v2
    ```
 
 #### Consideraciones Críticas de Seguridad y Uso:
 * **Nunca expongas tu clave**: Bajo ninguna circunstancia escribas tu `OPENAI_API_KEY` directamente en el código de `src/` o `scripts/`. Utiliza siempre `os.getenv("OPENAI_API_KEY")`.
-* **Uso sin Costo (TF-IDF)**: Si no deseas usar la API Key de OpenAI o no cuentas con saldo en tu cuenta, puedes dejar el backend como `EMBEDDING_BACKEND=tfidf`. Los scripts ejecutarán todo de forma local, rápida y gratuita utilizando codificación por n-gramas de caracteres.
+* **Alternativas de Embeddings sin Costo**:
+  * **TF-IDF**: Por defecto, ejecuta localmente por n-gramas de caracteres sin necesidad de instalar dependencias pesadas.
+  * **Sentence-Transformers**: Ejecuta embeddings vectoriales semánticos locales de Hugging Face, de forma gratuita y sin internet, pero requiere instalar las dependencias asociadas (`sentence-transformers` y `torch`).
 * **Declaración sin comillas**: En los archivos de entorno `.env` en Python, no es necesario encerrar las cadenas de texto o llaves API entre comillas (por ejemplo, usa `CLAVE=mi_valor` en lugar de `CLAVE="mi_valor"`).
 
 ---
@@ -103,6 +111,8 @@ El proyecto requiere las siguientes bibliotecas de Python para funcionar de mane
 - `scikit-learn`
 - `joblib`
 - `python-dotenv` (opcional, para cargar archivos `.env`)
+- `sentence-transformers` (opcional, requerido para habilitar el backend local de Hugging Face)
+- `torch` (opcional, dependencia implícita de sentence-transformers)
 
 ---
 

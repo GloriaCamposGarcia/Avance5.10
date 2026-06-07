@@ -48,6 +48,7 @@ def build_embeddings(texts, backend=None, batch_size=128):
     Construye la representación de embeddings (matriz CSR o array Numpy L2 normalizado):
     - backend 'openai': consulta el API de OpenAI.
     - backend 'tfidf': entrena TF-IDF local a nivel de caracteres (n-gramas 1-3).
+    - backend 'sentence-transformers': calcula embeddings locales usando un modelo de Hugging Face.
     """
     selected_backend = (backend or EMBEDDING_BACKEND).strip().lower()
     texts_index = pd.Index(texts).dropna().astype(str)
@@ -59,6 +60,20 @@ def build_embeddings(texts, backend=None, batch_size=128):
             chunks.extend(_openai_embeddings_batch(batch))
         X = _normalize_embedding_matrix(np.asarray(chunks, dtype=float))
         return X, None, 'openai'
+
+    if selected_backend in ['sentence-transformers', 'hf', 'sentencetransformers']:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                "La biblioteca 'sentence-transformers' no está instalada. "
+            ) from exc
+
+        model_name = os.getenv("HF_EMBEDDING_MODEL", "all-MiniLM-L6-v2").strip()
+        model = SentenceTransformer(model_name)
+        embeddings = model.encode(texts_index.tolist(), show_progress_bar=False, convert_to_numpy=True)
+        X = _normalize_embedding_matrix(embeddings)
+        return X, None, 'sentence-transformers'
 
     vectorizer = TfidfVectorizer(ngram_range=(1, 3), analyzer='char_wb', min_df=1)
     X = vectorizer.fit_transform(texts_index)
