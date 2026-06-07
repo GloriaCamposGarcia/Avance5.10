@@ -31,18 +31,46 @@ def main():
             pass
 
     # 1. Definir rutas y cargar dataset
-    raw_data_path = project_root / 'data' / 'raw' / 'Entities_Dataset_sintetico.csv'
+    raw_data_path = project_root / 'data' / 'raw' / 'entity_source_results.csv'
     processed_dir = project_root / 'data' / 'processed'
     processed_dir.mkdir(parents=True, exist_ok=True)
 
     if not raw_data_path.exists():
         print(f"ERROR: No se encontró el dataset en {raw_data_path}")
-        print("Por favor, coloca 'Entities_Dataset_sintetico.csv' en la carpeta data/raw/")
+        print("Por favor, coloca 'entity_source_results.csv' en la carpeta data/raw/")
         sys.exit(1)
 
     print(f"Cargando dataset desde {raw_data_path}...")
-    df = pd.read_csv(raw_data_path)
-    print(f"Dataset cargado con dimensiones: {df.shape}")
+    df_raw = pd.read_csv(raw_data_path)
+    
+    # Extraer catálogo de entidades únicas desde query_used
+    print("Extrayendo catálogo de entidades únicas desde la columna 'query_used'...")
+    entities = {}
+    import ast
+    for val in df_raw['query_used'].dropna().unique():
+        try:
+            data = ast.literal_eval(val)
+            if isinstance(data, list) and len(data) > 0:
+                item = data[0]
+                ent_id = item.get('entity_id')
+                name = item.get('query_value')
+                metadata = item.get('metadata', {})
+                country = metadata.get('country_code', '')
+                raw_type = metadata.get('entity_type', '')
+                ent_type = 'MORAL' if raw_type == 'PM' else ('FISICA' if raw_type == 'PF' else raw_type)
+                
+                if ent_id and name and ent_id not in entities:
+                    entities[ent_id] = {
+                        'entity_id': ent_id,
+                        'entity_name': name,
+                        'entity_type': ent_type,
+                        'country_code': country
+                    }
+        except Exception:
+            continue
+            
+    df = pd.DataFrame(list(entities.values()))
+    print(f"Dataset de entidades construido con dimensiones: {df.shape}")
 
     # 2. Normalización de nombres de entidades
     print("\nEjecutando normalización de nombres...")

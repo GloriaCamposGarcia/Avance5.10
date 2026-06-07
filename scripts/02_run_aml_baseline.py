@@ -36,19 +36,95 @@ def main():
         except Exception:
             pass
 
-    # 1. Definir rutas y cargar dataset
-    raw_data_path = project_root / 'data' / 'raw' / 'entities_osint_homogeneous.csv'
+    # 1. Definir rutas y cargar datasets
+    source_results_path = project_root / 'data' / 'raw' / 'entity_source_results.csv'
+    evidence_items_path = project_root / 'data' / 'raw' / 'evidence_items.csv'
     processed_dir = project_root / 'data' / 'processed'
     processed_dir.mkdir(parents=True, exist_ok=True)
 
-    if not raw_data_path.exists():
-        print(f"ERROR: No se encontró el dataset en {raw_data_path}")
-        print("Por favor, coloca 'entities_osint_homogeneous.csv' en la carpeta data/raw/")
+    if not source_results_path.exists() or not evidence_items_path.exists():
+        print(f"ERROR: Falta alguno de los datasets en data/raw/")
+        print("Por favor, coloca 'entity_source_results.csv' y 'evidence_items.csv' en la carpeta data/raw/")
         sys.exit(1)
 
-    print(f"Cargando dataset OSINT desde {raw_data_path}...")
-    df = pd.read_csv(raw_data_path)
-    print(f"Dataset cargado con dimensiones: {df.shape}")
+    print(f"Cargando dataset de resultados desde {source_results_path}...")
+    df_sources = pd.read_csv(source_results_path)
+    print(f"Cargando dataset de evidencias desde {evidence_items_path}...")
+    df_evidence = pd.read_csv(evidence_items_path)
+
+    print("\nConsolidando métricas a nivel de entidad (OSINT Homogeneous)...")
+    
+    # Extraer catálogo de entidades únicas desde query_used
+    entities = {}
+    import ast
+    for val in df_sources['query_used'].dropna().unique():
+        try:
+            data = ast.literal_eval(val)
+            if isinstance(data, list) and len(data) > 0:
+                item = data[0]
+                ent_id = item.get('entity_id')
+                name = item.get('query_value')
+                metadata = item.get('metadata', {})
+                country = metadata.get('country_code', '')
+                raw_type = metadata.get('entity_type', '')
+                ent_type = 'MORAL' if raw_type == 'PM' else ('FISICA' if raw_type == 'PF' else raw_type)
+                
+                if ent_id and name and ent_id not in entities:
+                    entities[ent_id] = {
+                        'entity_id': ent_id,
+                        'entity_name': name,
+                        'entity_type': ent_type,
+                        'country_code': country
+                    }
+        except Exception:
+            continue
+            
+    df_entities = pd.DataFrame(list(entities.values()))
+    
+    # Agrupaciones sobre entity_source_results.csv
+    sources_eval = df_sources.groupby('entity_id').size().rename('sources_evaluated')
+    sources_hallazgo = df_sources[df_sources['evidence_count'] > 0].groupby('entity_id').size().rename('sources_with_hallazgo')
+    
+    # Agrupaciones sobre evidence_items.csv
+    max_id_score = df_evidence.groupby('entity_id')['identity_score'].max().rename('max_identity_score')
+    evidence_cnt = df_evidence.groupby('entity_id').size().rename('evidence_items')
+    
+    df_evidence['is_review'] = df_evidence['review_required'].astype(str).str.lower().isin(['true', '1'])
+    review_cnt = df_evidence[df_evidence['is_review']].groupby('entity_id').size().rename('review_items')
+    
+    def build_review_queue(group):
+        reviews = []
+        for _, r in group[group['is_review']].iterrows():
+            p = 'high' if r['identity_score'] >= 0.8 else 'medium'
+            reviews.append({'priority': p})
+        return json.dumps(reviews)
+        
+    review_queues = df_evidence.groupby('entity_id').apply(build_review_queue).rename('review_queue_json')
+    
+    # Combinar todo
+    df = df_entities.merge(sources_eval, on='entity_id', how='left')
+    df = df.merge(sources_hallazgo, on='entity_id', how='left')
+    df = df.merge(max_id_score, on='entity_id', how='left')
+    df = df.merge(evidence_cnt, on='entity_id', how='left')
+    df = df.merge(review_cnt, on='entity_id', how='left')
+    df = df.merge(review_queues, on='entity_id', how='left')
+    
+    # Llenar nulos
+    df['sources_with_hallazgo'] = df['sources_with_hallazgo'].fillna(0).astype(int)
+    df['sources_evaluated'] = df['sources_evaluated'].fillna(0).astype(int)
+    df['max_identity_score'] = df['max_identity_score'].fillna(0.0)
+    df['evidence_items'] = df['evidence_items'].fillna(0).astype(int)
+    df['review_items'] = df['review_items'].fillna(0).astype(int)
+    df['review_queue_json'] = df['review_queue_json'].fillna('[]')
+    
+    # overall_decision
+    df['overall_decision'] = np.where(
+        df['review_items'] > 0,
+        'needs_review',
+        np.where(df['evidence_items'] > 0, 'accepted', 'no_match')
+    )
+    
+    print(f"Dataset OSINT homogéneo consolidado con dimensiones: {df.shape}")
 
     # 2. Generar variable objetivo
     target_col = 'riesgo_fraude_aml'

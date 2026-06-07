@@ -27,8 +27,8 @@ A continuación se detalla la jerarquía y el propósito de cada elemento del re
 Avance5.10/
 ├── data/
 │   ├── raw/                  # Colocar los datasets CSV fuente aquí.
-│   │   ├── Entities_Dataset_sintetico.csv  # Datos iniciales de entidades.
-│   │   └── entities_osint_homogeneous.csv  # Reportes OSINT estructurados.
+│   │   ├── entity_source_results.csv  # Resultados de consultas y metadatos de entidades.
+│   │   └── evidence_items.csv         # Evidencias recuperadas para las entidades.
 │   └── processed/            # Ubicación de los CSVs y modelos generados.
 │       ├── similarity_results.csv          # Similitudes coseno calculadas.
 │       ├── manual_review_queue.csv         # Cola de revisión manual priorizada.
