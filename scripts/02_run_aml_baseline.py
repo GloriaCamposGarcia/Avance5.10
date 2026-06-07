@@ -1,3 +1,4 @@
+from sklearn.metrics import accuracy_score
 import os
 import sys
 import json
@@ -134,7 +135,19 @@ def main():
         grid = param_grids.get(name, {})
         if not grid:
             # dummy no tiene grid
-            tuned_models[name] = trained_models[name]
+            best_pipe = trained_models[name]
+            tuned_models[name] = best_pipe
+            metrics_val = quality_metrics(best_pipe, X_val, y_val)
+            tuned_rows.append({
+                'model': name,
+                'best_score_cv_pr_auc': np.nan,
+                'accuracy': round(float(accuracy_score(y_val, best_pipe.predict(X_val))), 4),
+                'precision': round(float(metrics_val['precision']), 4),
+                'recall_pos': round(float(metrics_val['recall_pos']), 4),
+                'f1': round(float(metrics_val['f1']), 4),
+                'pr_auc': round(float(metrics_val['pr_auc']), 4),
+                'roc_auc': round(float(metrics_val['roc_auc']), 4),
+            })
             continue
 
         pipeline = Pipeline([('preprocessor', preprocessor), ('model', clone(candidate_models[name]))])
@@ -173,10 +186,16 @@ def main():
     print(f"Modelo exportado en: {model_export_path}")
 
     # Evaluación final en prueba (test)
+    y_pred_test = best_pipeline.predict(X_test)
+    try:
+        y_score_test = best_pipeline.predict_proba(X_test)[:, 1]
+    except Exception:
+        y_score_test = np.full(shape=len(y_pred_test), fill_value=np.nan, dtype=float)
+
     test_metrics = quality_metrics(best_pipeline, X_test, y_test)
     test_metrics_df = pd.DataFrame([{
         'model': best_model_name,
-        'accuracy': round(float(accuracy_score(y_test, best_pipeline.predict(X_test))), 4),
+        'accuracy': round(float(accuracy_score(y_test, y_pred_test)), 4),
         'precision': round(test_metrics['precision'], 4),
         'recall': round(test_metrics['recall_pos'], 4),
         'f1': round(test_metrics['f1'], 4),
@@ -188,14 +207,26 @@ def main():
     test_metrics_df.to_csv(test_metrics_path, index=False)
     print(f"Métricas sobre split de prueba guardadas en: {test_metrics_path}")
 
+    # Guardar predicciones de test (y_true, y_pred, y_score)
+    test_predictions_df = pd.DataFrame({
+        'y_true': np.asarray(y_test).ravel(),
+        'y_pred': np.asarray(y_pred_test).ravel(),
+        'y_score': np.asarray(y_score_test).ravel(),
+    })
+    test_predictions_path = processed_dir / 'test_predictions.csv'
+    test_predictions_df.to_csv(test_predictions_path, index=False)
+    print(f"Predicciones de prueba guardadas en: {test_predictions_path}")
+
     # Manifest json
     manifest_path = processed_dir / 'run_manifest.json'
     manifest = {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'project_root': str(project_root),
         'candidate_features': candidate_features,
         'selected_model': best_model_name,
         'model_path': str(model_export_path),
         'test_metrics_path': str(test_metrics_path),
+        'test_predictions_path': str(test_predictions_path),
         'confusion_matrix': test_metrics['confusion_matrix']
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
@@ -222,9 +253,9 @@ def main():
     print(df_scored['risk_level'].value_counts().to_string())
 
     # Exportar predicciones
-    predictions_path = processed_dir / 'test_predictions.csv'
-    df_scored[['entity_id', 'entity_name', 'osint_risk_score', 'risk_level']].to_csv(predictions_path, index=False)
-    print(f"Predicciones y scores continuos exportados en: {predictions_path}")
+    risk_scores_path = processed_dir / 'osint_risk_scores.csv'
+    df_scored[['entity_id', 'entity_name', 'osint_risk_score', 'risk_level']].to_csv(risk_scores_path, index=False)
+    print(f"Predicciones y scores continuos exportados en: {risk_scores_path}")
 
     print("\nFase 2 completada con éxito.")
 

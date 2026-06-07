@@ -75,9 +75,17 @@ def evaluate_model(name, estimator, preprocessor, X_train, y_train, X_val, y_val
     model.fit(X_train, y_train)
 
     out = []
-    for split_name, X_split, y_split in [('validation', X_val, y_val), ('test', X_test, y_test)]:\
+    for split_name, X_split, y_split in [('validation', X_val, y_val), ('test', X_test, y_test)]:
         y_pred = model.predict(X_split)
         y_score = model.predict_proba(X_split)[:, 1] if hasattr(model, 'predict_proba') else None
+
+        # Calcular ROC AUC de manera segura para evitar fallos con predicciones constantes
+        roc_auc = np.nan
+        if y_score is not None:
+            try:
+                roc_auc = round(float(roc_auc_score(y_split, y_score)), 4)
+            except Exception:
+                pass
 
         row = {
             'model': name,
@@ -86,7 +94,7 @@ def evaluate_model(name, estimator, preprocessor, X_train, y_train, X_val, y_val
             'precision': round(float(precision_score(y_split, y_pred, zero_division=0)), 4),
             'recall_pos': round(float(recall_score(y_split, y_pred, zero_division=0)), 4),
             'f1': round(float(f1_score(y_split, y_pred, zero_division=0)), 4),
-            'roc_auc': round(float(roc_auc_score(y_split, y_score)), 4) if y_score is not None else np.nan,
+            'roc_auc': roc_auc,
         }
         out.append(row)
     return model, out
@@ -95,12 +103,28 @@ def quality_metrics(model, X_split, y_split):
     """Calcula las métricas operativas completas del modelo."""
     y_pred = model.predict(X_split)
     y_score = model.predict_proba(X_split)[:, 1] if hasattr(model, 'predict_proba') else None
+    
+    # Manejo defensivo en el cálculo de ROC AUC y PR AUC para evitar caídas con modelos dummy o constantes
+    roc_auc = np.nan
+    if y_score is not None:
+        try:
+            roc_auc = float(roc_auc_score(y_split, y_score))
+        except Exception:
+            pass
+            
+    pr_auc = np.nan
+    if y_score is not None:
+        try:
+            pr_auc = float(average_precision_score(y_split, y_score))
+        except Exception:
+            pass
+
     out = {
         'precision': float(precision_score(y_split, y_pred, zero_division=0)),
         'recall_pos': float(recall_score(y_split, y_pred, zero_division=0)),
         'f1': float(f1_score(y_split, y_pred, zero_division=0)),
-        'roc_auc': float(roc_auc_score(y_split, y_score)) if y_score is not None else np.nan,
-        'pr_auc': float(average_precision_score(y_split, y_score)) if y_score is not None else np.nan,
+        'roc_auc': roc_auc,
+        'pr_auc': pr_auc,
         'confusion_matrix': confusion_matrix(y_split, y_pred).tolist(),
     }
     return out
