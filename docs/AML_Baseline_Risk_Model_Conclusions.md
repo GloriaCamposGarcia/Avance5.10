@@ -1,6 +1,6 @@
 # Conclusiones del Modelo de Riesgo AML (Fase 2 - Datos Reales e Integración de Ensambles)
 
-Este documento resume los resultados, métricas de evaluación de algoritmos baseline y ensambles, análisis de importancia de variables y el Score de Riesgo AML tras la migración a los datasets reales (`entity_source_results.csv` y `evidence_items.csv`).
+Este documento resume los resultados, métricas de evaluación de algoritmos baseline y cuatro modelos de ensamble, análisis de importancia de variables y el Score de Riesgo AML tras la migración a los datasets reales (`entity_source_results.csv` y `evidence_items.csv`).
 
 ## 1. Distribución de la Clase y Partición (Datos Reales)
 - **Clase Objetivo**: La etiqueta de negocio `riesgo_fraude_aml` se define a partir de reglas operativas basadas en coincidencia, fuentes con hallazgos, alertas abiertas y nivel de coincidencia de identidad.
@@ -8,31 +8,41 @@ Este documento resume los resultados, métricas de evaluación de algoritmos bas
   - `0` (Sin riesgo crítico): **83.05%** (4,121 registros)
   - `1` (Riesgo AML/Fraude): **16.95%** (841 registros)
   
-> Esta distribución del 16.95% ya es más realista y representativa para escenarios reales, a diferencia del dataset sintético previo que tenía un sesgo del ~74% de riesgo positivo.
+> [!NOTE]
+> Esta distribución del 16.95% es altamente realista y representativa para escenarios reales de prevención de lavado de dinero (AML), a diferencia del dataset sintético previo que tenía un sesgo del ~74% de riesgo positivo.
 - **Partición Estratificada**: Se mantuvo la partición 60/20/20 (Entrenamiento, Validación y Prueba) para asegurar que el desbalance natural de clase se preserve equitativamente en todos los conjuntos de datos.
 
 ---
 
 ## 2. Comparación de Modelos Baseline y Ensambles (Validation)
-Todos los modelos fueron optimizados usando búsqueda GridSearchCV y validados mediante validación cruzada estratificada StratifiedKFold, 3 splits con métrica de optimización average_precision (PR-AUC). Se incorporaron estrategias de ensamble homogéneo (**Random Forest** y **Gradient Boosting**) y ensamble heterogéneo (**Stacking Classifier**).
+Todos los modelos fueron optimizados usando búsqueda en rejilla (`GridSearchCV`) y validados mediante validación cruzada estratificada (`StratifiedKFold`, 3 splits) con métrica de optimización `average_precision` (PR-AUC). 
 
-A continuación se presenta la tabla comparativa consolidada, incluyendo el tiempo de entrenamiento:
+Se incorporaron **cuatro modelos de ensamble** cubriendo dos estrategias distintas:
+* **Estrategias Homogéneas**:
+  * **Random Forest (`baseline_3_rf`)**: Basado en Bagging.
+  * **Gradient Boosting (`baseline_4_gb`)**: Basado en Boosting.
+* **Estrategias Heterogéneas**:
+  * **Stacking Classifier (`ensemble_stacking`)**: Combina predicciones de los tres mejores modelos previos mediante un meta-clasificador Logístico.
+  * **Voting Classifier (`ensemble_voting`)**: Combina predicciones de los mismos tres mejores modelos mediante votación suave ponderada (Soft Voting/Blending).
+
+A continuación se presenta la tabla comparativa consolidada, ordenada por la métrica principal `PR-AUC`, la cual incorpora el mejor modelo individual y los 4 modelos de ensamble desarrollados:
 
 | Modelo | CV PR-AUC | Accuracy (Val) | Precision (Val) | Recall Pos (Val) | F1-Score (Val) | PR-AUC (Val) | ROC-AUC (Val) | Tiempo de Entrenamiento (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Random Forest (`baseline_3_rf`)** | **1.0000** | **0.9990** | **0.9941** | **1.0000** | **0.9970** | **1.0000** | **1.0000** | **1.1199 s** |
-| Stacking Classifier (`ensemble_stacking`) | - | 0.9970 | 0.9825 | 1.0000 | 0.9912 | 0.9999 | 1.0000 | 0.4880 s |
-| Árbol de Decisión (`baseline_2_tree`) | 0.9986 | 0.9970 | 0.9825 | 1.0000 | 0.9912 | 0.9966 | 0.9996 | 0.2067 s |
-| Regresión Logística (`baseline_1_logreg`) | 0.9980 | 0.9950 | 0.9711 | 1.0000 | 0.9853 | 0.9927 | 0.9988 | 0.2647 s |
-| SVM (`baseline_5_svm`) | 0.9987 | 0.9960 | 0.9824 | 0.9940 | 0.9882 | 0.9908 | 0.9986 | 1.2356 s |
-| Gradient Boosting (`baseline_4_gb`) | 1.0000 | 0.9980 | 0.9882 | 1.0000 | 0.9941 | 0.9882 | 0.9988 | 0.7129 s |
-| KNN (`baseline_6_knn`) | 0.9445 | 0.9688 | 0.9363 | 0.8750 | 0.9046 | 0.9569 | 0.9862 | 0.5650 s |
-| Dummy Classifier (`baseline_0_dummy`) | - | 0.8306 | 0.0000 | 0.0000 | 0.0000 | 0.1694 | 0.5000 | 0.0131 s |
+| **Random Forest (`baseline_3_rf`)** [Ensamble Homogéneo] | **1.0000** | **0.9990** | **0.9941** | **1.0000** | **0.9970** | **1.0000** | **1.0000** | **1.0710 s** |
+| Stacking Classifier (`ensemble_stacking`) [Ensamble Heterogéneo] | - | 0.9970 | 0.9825 | 1.0000 | 0.9912 | 0.9999 | 1.0000 | 0.5104 s |
+| Voting Classifier (`ensemble_voting`) [Ensamble Heterogéneo] | - | 0.9970 | 0.9825 | 1.0000 | 0.9912 | 0.9998 | 1.0000 | 0.1233 s |
+| **Árbol de Decisión (`baseline_2_tree`)** [Mejor Individual] | 0.9986 | 0.9970 | 0.9825 | 1.0000 | 0.9912 | 0.9966 | 0.9996 | 0.2510 s |
+| Regresión Logística (`baseline_1_logreg`) [Individual] | 0.9980 | 0.9950 | 0.9711 | 1.0000 | 0.9853 | 0.9927 | 0.9988 | 0.5559 s |
+| SVM (`baseline_5_svm`) [Individual] | 0.9987 | 0.9960 | 0.9824 | 0.9940 | 0.9882 | 0.9908 | 0.9986 | 1.8954 s |
+| Gradient Boosting (`baseline_4_gb`) [Ensamble Homogéneo] | 1.0000 | 0.9980 | 0.9882 | 1.0000 | 0.9941 | 0.9882 | 0.9988 | 0.7726 s |
+| KNN (`baseline_6_knn`) [Individual] | 0.9445 | 0.9688 | 0.9363 | 0.8750 | 0.9046 | 0.9569 | 0.9862 | 0.5405 s |
+| Dummy Classifier (`baseline_0_dummy`) [Baseline] | - | 0.8306 | 0.0000 | 0.0000 | 0.0000 | 0.1694 | 0.5000 | 0.0112 s |
 
-### Hallazgos Clave:
-1. **Random Forest (`baseline_3_rf`)** es el **mejor modelo absoluto**, liderando en F1-Score (0.9970) y manteniendo un PR-AUC y ROC-AUC perfectos de 1.0000 en validación. Su tiempo de ejecución es sumamente eficiente (~1.12 s).
-2. **Stacking Classifier (`ensemble_stacking`)** (Ensamble heterogéneo que combina RF, Árbol y Regresión Logística mediante un meta-clasificador Logístico balanceado) demuestra un rendimiento sobresaliente (F1-score de 0.9912, PR-AUC 0.9999, ROC-AUC 1.0000). Al utilizar estimadores ya entrenados, su tiempo de ajuste final es de apenas 0.4880 s.
-3. **Gradient Boosting (`baseline_4_gb`)** tuvo un desempeño ligeramente menor en la métrica PR-AUC en validación (0.9882) comparado con el Random Forest, a pesar de tener un buen F1-Score.
+### Argumentos Sólidos para la Elección del Modelo Final:
+1. **Rendimiento General**: **Random Forest (`baseline_3_rf`)** es el ganador definitivo al alcanzar el F1-Score más alto (0.9970) y conservar métricas perfectas de PR-AUC (1.0000) y ROC-AUC (1.0000) en el split de validación. Supera tanto a los clasificadores individuales como a los otros ensembles.
+2. **Eficiencia Temporal**: Random Forest se ajusta en **1.0710 s**, lo que representa un costo computacional mínimo idóneo para procesamiento batch o en tiempo real en entornos productivos de AML.
+3. **Comparación frente a Stacking y Voting**: Aunque el `ensemble_stacking` y el `ensemble_voting` muestran métricas sobresalientes (PR-AUC $\ge$ 0.9998), no logran superar el F1-Score del Random Forest debido a que la combinación de modelos base agrega un margen marginal de error al depender parcialmente de modelos más débiles en la frontera (como la Regresión Logística).
 
 ---
 

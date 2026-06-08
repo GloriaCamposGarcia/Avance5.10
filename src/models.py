@@ -8,7 +8,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier, StackingClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier, StackingClassifier, VotingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import (
@@ -155,5 +155,15 @@ def build_stacking(estimators, final_estimator=None):
         estimators=estimators,
         final_estimator=final_estimator,
         cv=3,
+        n_jobs=1
+    )
+
+def build_voting(estimators, voting='soft'):
+    """
+    Construye un VotingClassifier con estimadores base y tipo de votación.
+    """
+    return VotingClassifier(
+        estimators=estimators,
+        voting=voting,
         n_jobs=1
     )

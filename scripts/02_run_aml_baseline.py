@@ -26,7 +26,7 @@ from src.models import (
     build_preprocessor, GRID_DUMMY, GRID_GB, GRID_KNN, GRID_LOGISTIC,
     GRID_RF, GRID_SVM, GRID_TREE, build_dummy, build_gb, build_knn,
     build_logistic, build_rf, build_svm, build_tree, evaluate_model,
-    quality_metrics, max_priority_score, build_stacking
+    quality_metrics, max_priority_score, build_stacking, build_voting
 )
 
 def main():
@@ -268,15 +268,15 @@ def main():
             'train_time_seconds': round(train_time, 4),
         })
 
-    # 7.1. Construcción del Stacking Classifier (Ensamble Heterogéneo)
-    print("\nConstruyendo y entrenando Stacking Classifier...")
+    # 7.1. Construcción de Estimadores de Ensamble Heterogéneo
+    base_estimators = [
+        ('logreg', clone(tuned_models['baseline_1_logreg'].named_steps['model'])),
+        ('tree', clone(tuned_models['baseline_2_tree'].named_steps['model'])),
+        ('rf', clone(tuned_models['baseline_3_rf'].named_steps['model'])),
+    ]
+
+    print("\nConstruyendo y entrenando Stacking Classifier (Ensamble Heterogéneo 1)...")
     try:
-        base_estimators = [
-            ('logreg', clone(tuned_models['baseline_1_logreg'].named_steps['model'])),
-            ('tree', clone(tuned_models['baseline_2_tree'].named_steps['model'])),
-            ('rf', clone(tuned_models['baseline_3_rf'].named_steps['model'])),
-        ]
-        
         t0_stack = time.time()
         stacking_clf = build_stacking(estimators=base_estimators)
         stacking_pipeline = Pipeline([('preprocessor', preprocessor), ('model', stacking_clf)])
@@ -300,6 +300,32 @@ def main():
         print("Stacking Classifier entrenado con éxito.")
     except Exception as e:
         print(f"Error al construir/entrenar el Stacking Classifier: {e}")
+
+    print("\nConstruyendo y entrenando Voting Classifier (Ensamble Heterogéneo 2)...")
+    try:
+        t0_vote = time.time()
+        voting_clf = build_voting(estimators=base_estimators, voting='soft')
+        voting_pipeline = Pipeline([('preprocessor', preprocessor), ('model', voting_clf)])
+        voting_pipeline.fit(X_train, y_train)
+        voting_time = time.time() - t0_vote
+        
+        tuned_models['ensemble_voting'] = voting_pipeline
+        metrics_val_vote = quality_metrics(voting_pipeline, X_val, y_val)
+        
+        tuned_rows.append({
+            'model': 'ensemble_voting',
+            'best_score_cv_pr_auc': np.nan,
+            'accuracy': round(float(accuracy_score(y_val, voting_pipeline.predict(X_val))), 4),
+            'precision': round(float(metrics_val_vote['precision']), 4),
+            'recall_pos': round(float(metrics_val_vote['recall_pos']), 4),
+            'f1': round(float(metrics_val_vote['f1']), 4),
+            'pr_auc': round(float(metrics_val_vote['pr_auc']), 4),
+            'roc_auc': round(float(metrics_val_vote['roc_auc']), 4),
+            'train_time_seconds': round(voting_time, 4),
+        })
+        print("Voting Classifier entrenado con éxito.")
+    except Exception as e:
+        print(f"Error al construir/entrenar el Voting Classifier: {e}")
 
     # Exportar tabla comparativa ordenada por pr_auc desc
     tuned_df = pd.DataFrame(tuned_rows).sort_values('pr_auc', ascending=False).reset_index(drop=True)
